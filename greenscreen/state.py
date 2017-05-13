@@ -22,7 +22,10 @@ class SimpleState(State):
         self.component = component
 
     def render(self, terminal: Terminal) -> str:
-        return '\n'.join(self.component.render(terminal))
+        return '\n'.join([
+            line.escape(terminal)
+            for line in self.component.render(terminal.width, terminal.height - 1)
+        ])
 
     def keypress(self, key):
         self.component.keypress(key)

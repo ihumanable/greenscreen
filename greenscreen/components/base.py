@@ -1,47 +1,63 @@
-from typing import Optional, List
-
-from blessed import Terminal
+from typing import List, Set
 
 from greenscreen.exceptions import InvalidContent
-from greenscreen.style.border import Borders, Border
-from greenscreen.style.sizing import Sizing
+from greenscreen.display.border import Borders, Border
+from greenscreen.display.sizing import Sizing
+from greenscreen.display.text import Line, Fragment, Color, Capability
 
 
 class Component(object):
-    def __init__(self, border: Border=Borders.NONE, padding: Sizing=None, margin: Sizing=None):
+    def __init__(self,
+                 border: Border=Borders.NONE,
+                 padding: Sizing=None,
+                 margin: Sizing=None,
+                 foreground: Color=None,
+                 background: Color=None,
+                 capabilities: Set[Capability]=None):
         self.border = border
         self.padding = padding or Sizing()
         self.margin = margin or Sizing()
+        self.foreground = foreground
+        self.background = background
+        self.capabilities = capabilities or set()
 
-    def render(self, terminal: Terminal, width: Optional[int]=None, height: Optional[int]=None) -> List[str]:
-        width = width or terminal.width
-        height = height or terminal.height
+    def line(self, value: str) -> Line:
+        return Line(self.fragment(value))
 
+    def fragment(self, value: str) -> Fragment:
+        return Fragment(
+            value,
+            foreground=self.foreground,
+            background=self.background,
+            capabilities=self.capabilities
+        )
+
+    def render(self, width: int, height: int) -> List[Line]:
         return (
             self.render_vertical_margin(width, self.margin.top) +
             self.render_border_top(width) +
             self.render_vertical_padding(width, self.padding.top) +
-            self.render_content(terminal, width, height) +
+            self.render_content(width, height) +
             self.render_vertical_padding(width, self.padding.bottom) +
             self.render_border_bottom(width) +
             self.render_vertical_margin(width, self.margin.bottom)
         )
 
-    def render_vertical_margin(self, width: int, height: int) -> List[str]:
-        return [' ' * width] * height
+    def render_vertical_margin(self, width: int, height: int) -> List[Line]:
+        return [self.line(' ' * width)] * height
 
-    def render_border_top(self, width: int) -> List[str]:
+    def render_border_top(self, width: int) -> List[Line]:
         if not self.border.has_top:
             return []
 
         border_width = width - self.margin.left - self.margin.right
-        return [''.join([
+        return [self.line(''.join([
             ' ' * self.margin.left,
             self.border.top_border(border_width),
             ' ' * self.margin.right,
-        ])]
+        ]))]
 
-    def render_vertical_padding(self, width: int, height: int) -> List[str]:
+    def render_vertical_padding(self, width: int, height: int) -> List[Line]:
         if height == 0:
             return []
 
@@ -60,9 +76,9 @@ class Component(object):
             ' ' * self.margin.right,
         ])
 
-        return [line] * height
+        return [self.line(line)] * height
 
-    def render_content(self, terminal: Terminal, width: int, height: int) -> List[str]:
+    def render_content(self, width: int, height: int) -> List[Line]:
         reserved_width = sum([
             self.margin.left,
             self.border.left_width,
@@ -84,56 +100,59 @@ class Component(object):
         inner_width = width - reserved_width
         inner_height = height - reserved_height
 
-        prefix = ''.join([
+        prefix = self.fragment(''.join([
             ' ' * self.margin.left,
             self.border.left_border(),
             ' ' * self.padding.left,
-        ])
+        ]))
 
-        suffix = ''.join([
+        suffix = self.fragment(''.join([
             ' ' * self.padding.right,
             self.border.right_border(),
             ' ' * self.margin.right,
-        ])
+        ]))
 
         result = []
-        content = self.content(terminal, inner_width, inner_height)
+        content = self.content(inner_width, inner_height)
         if len(content) != inner_height:
-            raise InvalidContent('Expected content height {}, actual height {}'.format(
+            raise InvalidContent('{}: Expected content height {}, actual height {}'.format(
+                self.__class__.__name__,
                 inner_height,
                 len(content)
             ))
 
-        invalid_lines = [len(line) for line in content if len(line) != inner_width]
+        invalid_lines = [
+            (idx, len(line))
+            for idx, line in enumerate(content)
+            if len(line) != inner_width
+        ]
+
         if invalid_lines:
-            raise InvalidContent('Expected content width {}, lines with widths {}'.format(
+            raise InvalidContent('{}: Expected content width {}, lines with widths {}'.format(
+                self.__class__.__name__,
                 inner_width,
                 invalid_lines
             ))
 
         for line in content:
-            if len(line) > inner_width:
-                line = line[:inner_width - 3] + '...'
-            result.append(''.join([
-                prefix,
-                line,
-                ' ' * (inner_width - len(line)),
-                suffix,
-            ]))
+            line.fragments.insert(0, prefix)
+            line.fragments.append(suffix)
+            result.append(line)
+
         return result
 
-    def render_border_bottom(self, width: int) -> List[str]:
+    def render_border_bottom(self, width: int) -> List[Line]:
         if not self.border.has_bottom:
             return []
 
         border_width = width - self.margin.left - self.margin.right
-        return [''.join([
+        return [self.line(''.join([
             ' ' * self.margin.left,
             self.border.bottom_border(border_width),
             ' ' * self.margin.right,
-        ])]
+        ]))]
 
-    def content(self, terminal: Terminal, width: int, height: int) -> List[str]:
+    def content(self, width: int, height: int) -> List[Line]:
         raise NotImplementedError('{cls} has not implemented render()'.format(
             cls=self.__class__.__name__
         ))
