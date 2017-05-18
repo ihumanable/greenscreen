@@ -2,10 +2,14 @@ from collections import defaultdict, deque
 from math import floor
 from typing import List, Iterable, Set
 
+from blessed.keyboard import Keystroke
+
 from greenscreen.components.base import Component
 from greenscreen.display.border import Border, Borders
 from greenscreen.display.sizing import Sizing
-from greenscreen.display.text import Line, Color, Capability
+from greenscreen.display.text import Line, Color, Capability, Colors
+from greenscreen.index import ListIndex
+from greenscreen.input import Result, Repaint, Unhandled
 
 
 class Layout(Component):
@@ -85,9 +89,11 @@ class HorizontalLayout(Layout):
                  background: Color=None,
                  capabilities: Set[Capability]=None):
         super().__init__(border, padding, margin, foreground, background, capabilities)
+        self.debug = False
         self.weights: List[int] = weights or []
         self.children: List[Component] = children or []
         self.repack(self.weights)
+        self.focus = ListIndex(self.children)
 
     def repack(self, weights: List[int]):
         self.weights = weights + ([1] * (max(0, len(self.children) - len(weights))))
@@ -105,19 +111,39 @@ class HorizontalLayout(Layout):
     def content(self, width: int, height: int) -> List[Line]:
         widths = self.weighted(width, self.weights)
 
-        debug = Line('{}x{} Weights: {}, Widths: {}'.format(width, height, self.weights, widths))
+        if self.debug:
+            debug = Line('{width}x{height} Weights: {weights}, Widths: {widths}'.format(
+                width=width,
+                height=height,
+                weights=self.weights,
+                widths=widths
+            ))
+
+        height = height - 1 if self.debug else height
 
         columns = []
-        for child_width, component in zip(widths, self.children):
-            columns.append(component.render(child_width, height - 1))
+        for idx, zipped in enumerate(zip(widths, self.children)):
+            child_width, component = zipped
+            component.border = Borders.HEAVY if idx == self.focus.index else Borders.NONE
+            component.margin = Sizing(0, 0, 0, 0) if idx == self.focus.index else Sizing(1, 1, 1, 1)
+            columns.append(component.render(child_width, height))
 
-        return [debug.fit(width)] + [self.combine(group) for group in zip(*columns)]
+        result = [self.combine(group) for group in zip(*columns)]
+        return [debug.fit(width)] + result if self.debug else result
 
-    def keypress(self, key):
-        if key.name == 'KEY_UP':
-            self.weights[0] += 1
-        elif key.name == 'KEY_DOWN':
-            self.weights[0] = max(1, self.weights[0] - 1)
+    def dispatch_keypress(self, key: Keystroke) -> Result:
+        return self.focus.value.handle_keypress(key) if self.focus.value else Unhandled()
+
+    def after_keypress(self, key: Keystroke) -> Result:
+        if key.name == 'KEY_LEFT':
+            self.focus.decr()
+            return Repaint(self)
+
+        if key.name == 'KEY_RIGHT':
+            self.focus.incr()
+            return Repaint(self)
+
+        return Unhandled()
 
 
 class VerticalLayout(Layout):
@@ -131,9 +157,11 @@ class VerticalLayout(Layout):
                  background: Color=None,
                  capabilities: Set[Capability]=None):
         super().__init__(border, padding, margin, foreground, background, capabilities)
+        self.debug = False
         self.weights: List[int] = weights or []
         self.children: List[Component] = children or []
         self.repack(self.weights)
+        self.focus = ListIndex(self.children)
 
     def repack(self, weights: List[int]):
         self.weights = weights + ([1] * (max(0, len(self.children) - len(weights))))
@@ -143,21 +171,40 @@ class VerticalLayout(Layout):
         self.weights.append(weight)
 
     def content(self, width: int, height: int) -> List[Line]:
-        height = height - 1
+        height = height - 1 if self.debug else height
 
         heights = self.weighted(height, self.weights)
 
-        debug = Line('{}x{} Weights: {}, Heights: {}'.format(width, height, self.weights, heights))
+        if self.debug:
+            debug = Line('{width}x{height} Weights: {weights}, Heights: {heights}'.format(
+                width=width,
+                height=height,
+                weights=self.weights,
+                heights=heights,
+            ))
 
-        result = [debug.fit(width)]
+        result = [debug.fit(width)] if self.debug else []
 
-        for child_height, component in zip(heights, self.children):
+        for idx, zipped in enumerate(zip(heights, self.children)):
+            child_height, component = zipped
+            component.border = Borders.HEAVY if idx == self.focus.index else Borders.NONE
+            component.margin = Sizing(0, 0, 0, 0) if idx == self.focus.index else Sizing(1, 1, 1, 1)
             result.extend(component.render(width, child_height))
 
         return result
 
-    def keypress(self, key):
+    def dispatch_keypress(self, key: Keystroke) -> Result:
+        return self.focus.value.handle_keypress(key) if self.focus.value else Unhandled()
+
+    def after_keypress(self, key: Keystroke) -> Result:
         if key.name == 'KEY_UP':
-            self.weights[0] += 1
-        elif key.name == 'KEY_DOWN':
-            self.weights[0] = max(1, self.weights[0] - 1)
+            self.focus.decr()
+            return Repaint(self)
+
+        if key.name == 'KEY_DOWN':
+            self.focus.incr()
+            return Repaint(self)
+
+        return Unhandled()
+
+

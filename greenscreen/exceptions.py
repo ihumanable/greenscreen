@@ -2,7 +2,7 @@ class DuplicateRegistration(Exception):
     pass
 
 
-class NoActiveState(Exception):
+class NoActiveScreen(Exception):
     pass
 
 

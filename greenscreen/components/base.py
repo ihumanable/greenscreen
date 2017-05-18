@@ -1,9 +1,12 @@
 from typing import List, Set
 
+from blessed.keyboard import Keystroke
+
 from greenscreen.exceptions import InvalidContent
 from greenscreen.display.border import Borders, Border
 from greenscreen.display.sizing import Sizing
 from greenscreen.display.text import Line, Fragment, Color, Capability
+from greenscreen.input import Result, Unhandled
 
 
 class Component(object):
@@ -33,6 +36,29 @@ class Component(object):
         )
 
     def render(self, width: int, height: int) -> List[Line]:
+        min_width = sum([
+            self.margin.left,
+            self.border.left_width,
+            self.padding.left,
+            1,
+            self.padding.right,
+            self.border.right_width,
+            self.margin.right
+        ])
+
+        min_height = sum([
+            self.margin.top,
+            self.border.top_height,
+            self.padding.top,
+            1,
+            self.padding.bottom,
+            self.border.bottom_height,
+            self.margin.bottom,
+        ])
+
+        if width < min_width or height < min_height:
+            return [Line('.' * width) for _ in range(height)]
+
         return (
             self.render_vertical_margin(width, self.margin.top) +
             self.render_border_top(width) +
@@ -44,7 +70,7 @@ class Component(object):
         )
 
     def render_vertical_margin(self, width: int, height: int) -> List[Line]:
-        return [self.line(' ' * width)] * height
+        return [self.line(' ' * width) for _ in range(height)]
 
     def render_border_top(self, width: int) -> List[Line]:
         if not self.border.has_top:
@@ -76,7 +102,7 @@ class Component(object):
             ' ' * self.margin.right,
         ])
 
-        return [self.line(line)] * height
+        return [self.line(line) for _ in range(height)]
 
     def render_content(self, width: int, height: int) -> List[Line]:
         reserved_width = sum([
@@ -122,7 +148,7 @@ class Component(object):
             ))
 
         invalid_lines = [
-            (idx, len(line))
+            (idx, len(line), str(line))
             for idx, line in enumerate(content)
             if len(line) != inner_width
         ]
@@ -156,3 +182,23 @@ class Component(object):
         raise NotImplementedError('{cls} has not implemented render()'.format(
             cls=self.__class__.__name__
         ))
+
+    def handle_keypress(self, key: Keystroke) -> Result:
+        result = self.keypress(key)
+        if result.handled:
+            return result
+
+        result = self.dispatch_keypress(key)
+        if result.handled:
+            return result
+
+        return self.after_keypress(key)
+
+    def keypress(self, key: Keystroke) -> Result:
+        return Unhandled()
+
+    def dispatch_keypress(self, key: Keystroke) -> Result:
+        return Unhandled()
+
+    def after_keypress(self, key: Keystroke) -> Result:
+        return Unhandled()

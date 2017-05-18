@@ -31,17 +31,13 @@ class Text(Component):
             remainder = height - len(lines)
             top = int(floor(remainder / 2))
             bottom = int(ceil(remainder / 2))
-            filler = self.line(' ' * width)
-            lines = ([filler] * top) + lines + ([filler] * bottom)
+            lines = (
+                [self.line(' ' * width) for _ in range(top)] +
+                lines +
+                [self.line(' ' * width) for _ in range(bottom)]
+            )
 
         if len(lines) > height:
             lines = lines[:height - 1] + [self.line((' ' * (width - 3)) + ' ↓ ')]
 
         return [line.fit(width) for line in lines]
-
-    def keypress(self, key):
-        if key.name == 'KEY_UP':
-            self.offset = max(0, self.offset - 1)
-        elif key.name == 'KEY_DOWN':
-            self.offset += 1
-

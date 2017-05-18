@@ -3,31 +3,36 @@ from greenscreen.components.layout import HorizontalLayout, VerticalLayout
 from greenscreen.components.text import Text
 from greenscreen.display.sizing import Sizing
 from greenscreen.display.text import Colors
-from greenscreen.state import SimpleState
+from greenscreen.screen import SimpleScreen
 from greenscreen.display.border import Borders
 
 app = Application()
-state = SimpleState(
+state = SimpleScreen(
     'main',
     app,
     HorizontalLayout(
         [
             VerticalLayout([
-                Text('Alpha', border=Borders.DOUBLE),
+                Text('Alpha'),
                 Text('Beta'),
             ]),
             VerticalLayout([
                 Text('Gamma'),
-                Text('Delta')
+                Text('Delta'),
+                Text('Epsilon')
             ]),
+            VerticalLayout([
+                Text('Phi'),
+            ])
         ],
         border=Borders.HEAVY,
-        margin=Sizing(4, 4, 4, 4),
-        padding=Sizing(4, 4, 4, 4),
+        margin=Sizing(2, 2, 2, 2),
+        padding=Sizing(2, 2, 2, 2),
         foreground=Colors.MAGENTA,
-        background=Colors.BRIGHT_BLUE,
     ),
 )
 
 app.active = 'main'
-app.run()
+
+if __name__ == '__main__':
+    app.run()
